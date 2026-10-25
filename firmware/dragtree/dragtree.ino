@@ -1,10 +1,9 @@
-// Drag tree step 1: read the buttons and print changes
+// Drag tree, two player reaction game
 
-// Buttons
+// -----  PINS  -----
 const int BTN_PLAYER_1 = 26;
 const int BTN_PLAYER_2 = 27;
 
-// Lamp relays
 const int LAMP_PRESTAGE = 16;
 const int LAMP_STAGE = 17;
 const int LAMP_AMBER_1 = 19;
@@ -21,6 +20,83 @@ const int RELAYS[] ={
 };
 
 const int NUM_RELAYS = sizeof(RELAYS) / sizeof(RELAYS[0]); 
+
+
+// ----- TIMINGS (MS) -----
+const unsigned long STAGE_TIME = ;
+const unsigned long AMBER_STEP = ;
+const unsigned long RANDOM_MIN = ;
+const unsigned long RANDOM_MAX = ;
+const unsigned long RESULT_TIME = ;
+const unsigned long IGNORE_TIME = 100;
+
+
+// ----- LAMPS FUNCTIONS -----
+void lampOn(int pin) { digitalWrite(pin, LOW); }
+void lampOff(int pin) { digitalWrite(pin, HIGH); }
+void allOff() {
+  for (int i = 0; i < NUM_RELAYS; i++) lampOff(RELAYS[i]);
+}
+
+
+// ----- PLAYERS -----
+struct Player {
+  const char* name;
+  int buttonPin;
+  int redLamp;
+  bool wasPressed;          // 
+  bool redLight;            // Bad start
+  bool done;                // If player pressed after green
+  unsigned long reaction;   // microseconds
+};
+
+Player p1 = {
+  "Player 1",
+  BTN_PLAYER_1, 
+  LAMP_RED_LEFT, 
+  false, 
+  false, 
+  false, 
+  0
+};
+
+Player p2 = {
+  "Player 2",
+  BTN_PLAYER_2,
+  LAMP_RED_RIGHT,
+  false,
+  false,
+  false,
+  0
+};
+
+bool isHeld(Player &p) {
+  return digitalRead(p.buttonPin) == LOW;
+}
+
+bool newPress(Player &p) {
+  bool now = isHeld(p);
+  bool result = now && !p.wasPressed;
+  p.wasPressed = now;
+  return result;
+}
+
+void resetPlayer(Player &p) {
+  p.redLight = false;
+  p.done = false;
+  p.reaction = 0;
+}
+
+void falseStart(Player &p) {
+  if (!p.redLight) {
+    p.redLight = true;
+    lampOn(p.redLamp);
+    Serial.print(p.name);
+    Serial.println(": RED LIGHT!!")
+  }
+}
+
+
 
 int lastP1 = HIGH;
 int lastP2 = HIGH;
