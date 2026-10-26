@@ -23,12 +23,24 @@ const int NUM_RELAYS = sizeof(RELAYS) / sizeof(RELAYS[0]);
 
 
 // ----- TIMINGS (MS) -----
-const unsigned long STAGE_TIME = ;
-const unsigned long AMBER_STEP = ;
-const unsigned long RANDOM_MIN = ;
-const unsigned long RANDOM_MAX = ;
-const unsigned long RESULT_TIME = ;
+const unsigned long STAGE_TIME = 0;
+const unsigned long AMBER_STEP = 0;
+const unsigned long RANDOM_MIN = 0;
+const unsigned long RANDOM_MAX = 0;
+const unsigned long RESULT_TIME = 0;
 const unsigned long IGNORE_TIME = 100;
+
+// ----- TYPES -----
+enum State { IDLE, PRESTAGE, STAGE, AMBERS, WAIT_RANDOM, GREEN, RESULT };
+struct Player {
+  const char* name;
+  int buttonPin;
+  int redLamp;
+  bool wasPressed;          // Buttons mode last round, for flank detection
+  bool redLight;            // Bad start
+  bool done;                // If player pressed after green
+  unsigned long reaction;   // microseconds
+};
 
 
 // ----- LAMPS FUNCTIONS -----
@@ -40,15 +52,6 @@ void allOff() {
 
 
 // ----- PLAYERS -----
-struct Player {
-  const char* name;
-  int buttonPin;
-  int redLamp;
-  bool wasPressed;          // 
-  bool redLight;            // Bad start
-  bool done;                // If player pressed after green
-  unsigned long reaction;   // microseconds
-};
 
 Player p1 = {
   "Player 1",
@@ -96,10 +99,23 @@ void falseStart(Player &p) {
   }
 }
 
+void printResult(Player &p) {
+  Serial.print(p.name);
+  if (p.redLight) {
+    Serial.println(": RED LIGHT!!");
+  } else {
+    Serial.print(": ");
+    Serial.print(p.reaction / 1000.0, 3);
+    Serial.println(" ms");
+  }
+}
+
 
 // ----- STATE MACHINE -----
-enum State { IDLE, PRESTAGE, STAGE, AMBERS, WAIT_RANDOM, GREEN, RESULT };
 State state = IDLE;
+unsigned long stateStart;
+unsigned long greenTime;
+unsigned long randomDelay;
 
 void setState (State s) {
   state = s;
@@ -185,7 +201,21 @@ void loop() {
       }
 
       if ((p1.done || p1.redLight) && (p2.done || p2.redLight)) {
-
+        printResult(p1);
+        printResult(p2);
+        if (p1.redLight && p2.redLight) {
+          Serial.println("No winner, both red lights");
+        } else if (p1.redLight) {
+          Serial.println("Winner: Player 2");
+        } else if (p2.redLight) {
+          Serial.println("Winner: Player 1");
+        } else if (p1.reaction < p2.reaction) {
+          Serial.println("Winner: Player 1");
+        } else if (p2.reaction < p1.reaction) {
+          Serial.println("Winner: Player 2");
+        } else {
+          Serial.println("Tie!");
+        }
         setState(RESULT);
       }
     break;
@@ -199,31 +229,5 @@ void loop() {
       }
     break;
 
-
-
-  }
-
-  for (int i = 0; i < NUM_RELAYS; i++) {
-    Serial.print("Relay ");
-    Serial.println(i + 1);
-
-    digitalWrite(RELAYS[i], LOW);
-    delay(6000);
-    digitalWrite(RELAYS[i], HIGH);
-    delay(200);
-  }
-
-  int p1 = digitalRead(BTN_PLAYER_1);
-  if (p1 != lastP1) {
-    Serial.print("Player 1: ");
-    Serial.println(p1 == LOW ? "Pressed" : "Released" );
-    lastP1 = p1;
-  }
-  
-  int p2 = digitalRead(BTN_PLAYER_2);
-  if (p2 != lastP2) {
-    Serial.print("Player 2: ");
-    Serial.println(p2 == LOW ? "Pressed" : "Released");
-    lastP2 = p2;
   }
 }
