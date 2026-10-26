@@ -92,14 +92,19 @@ void falseStart(Player &p) {
     p.redLight = true;
     lampOn(p.redLamp);
     Serial.print(p.name);
-    Serial.println(": RED LIGHT!!")
+    Serial.println(": RED LIGHT!!");
   }
 }
 
 
+// ----- STATE MACHINE -----
+enum State { IDLE, PRESTAGE, STAGE, AMBERS, WAIT_RANDOM, GREEN, RESULT };
+State state = IDLE;
 
-int lastP1 = HIGH;
-int lastP2 = HIGH;
+void setState (State s) {
+  state = s;
+  stateStart = millis();
+}
 
 void setup() {
   Serial.begin(115200);
@@ -114,6 +119,90 @@ void setup() {
 }
 
 void loop() {
+  bool p1New = newPress(p1);
+  bool p2New = newPress(p2);
+  unsigned long elapsed = millis() - stateStart;
+
+  switch (state){
+
+    case IDLE:
+      if (isHeld(p1) && isHeld(p2)) {
+        lampOn(LAMP_PRESTAGE);
+        setState(PRESTAGE);
+      }
+    break;
+
+    case PRESTAGE:
+      if (!isHeld(p1) && !isHeld(p2)) {
+        lampOn(LAMP_STAGE);
+        setState(STAGE);
+      }
+    break;
+
+    case STAGE:
+      if (elapsed > IGNORE_TIME) {
+        if (p1New) falseStart(p1);
+        if (p2New) falseStart(p2);
+      }
+      if (elapsed > STAGE_TIME) {
+        lampOn(LAMP_AMBER_1);
+        setState(AMBERS);
+      }
+    break;
+
+    case AMBERS:
+      if (p1New) falseStart(p1);
+      if (p2New) falseStart(p2);
+
+      if (elapsed > AMBER_STEP) lampOn(LAMP_AMBER_2);
+      if (elapsed > AMBER_STEP * 2) {
+        lampOn(LAMP_AMBER_3);
+        randomDelay = random(RANDOM_MIN, RANDOM_MAX);
+        setState(WAIT_RANDOM);
+      }
+    break;
+
+    case WAIT_RANDOM: 
+      if (p1New) falseStart(p1);
+      if (p2New) falseStart(p2);
+      
+      if (elapsed > randomDelay) {
+        lampOn(LAMP_GREEN);
+        greenTime = micros();
+        setState(GREEN);
+      }
+    break;
+
+    case GREEN:
+      if (p1New && !p1.done && !p1.redLight) {
+        p1.reaction = micros() - greenTime;
+        p1.done = true;
+      }
+
+      if (p2New && !p2.done && !p2.redLight) {
+        p2.reaction = micros() - greenTime;
+        p2.done = true;
+      }
+
+      if ((p1.done || p1.redLight) && (p2.done || p2.redLight)) {
+
+        setState(RESULT);
+      }
+    break;
+
+    case RESULT:
+      if (elapsed > RESULT_TIME) {
+        allOff();
+        resetPlayer(p1);
+        resetPlayer(p2);
+        setState(IDLE);
+      }
+    break;
+
+
+
+  }
+
   for (int i = 0; i < NUM_RELAYS; i++) {
     Serial.print("Relay ");
     Serial.println(i + 1);
