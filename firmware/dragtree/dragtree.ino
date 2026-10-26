@@ -27,9 +27,10 @@ const unsigned long STAGE_TIME = 2000;
 const unsigned long AMBER_STEP = 2000;
 const unsigned long RANDOM_MIN = 1000;
 const unsigned long RANDOM_MAX = 5000;
-const unsigned long RESULT_TIME = 1000;
+const unsigned long RESULT_TIME = 3000;
 const unsigned long IGNORE_TIME = 100;
 const unsigned long DEBOUNCE_TIME = 20;
+const unsigned long BLINK_TIME = 500;
 
 // ----- TYPES -----
 enum State { IDLE, PRESTAGE, STAGE, AMBERS, WAIT_RANDOM, GREEN, RESULT };
@@ -44,6 +45,8 @@ struct Player {
   bool stableState;         // debounced, trusted state
   unsigned long changedAt;  // millis() when rawState last changed
   unsigned long reaction;   // microseconds
+  int winLamp;
+  bool won;
 };
 
 State state = IDLE;
@@ -106,6 +109,13 @@ void resetPlayer(Player &p) {
   p.redLight = false;
   p.done = false;
   p.reaction = 0;
+  p.won = false;
+}
+
+void blinkPlayer(Player &p) {
+  unsigned long t = millis() - stateStart;
+  if ((t / BLINK_TIME) % 2 == 0) lampOn(p.winLamp);
+  else lampOff(p.winLamp);
 }
 
 void falseStart(Player &p) {
@@ -150,6 +160,8 @@ void setup() {
 
   pinMode(BTN_PLAYER_1, INPUT_PULLUP);
   pinMode(BTN_PLAYER_2, INPUT_PULLUP);
+  p1.winLamp = LAMP_AMBER_3;
+  p2.winLamp = LAMP_GREEN;
 }
 
 void loop() {
@@ -224,27 +236,36 @@ void loop() {
         if (p1.redLight && p2.redLight) {
           Serial.println("No winner, both red lights");
         } else if (p1.redLight) {
+          p2.won = true;
           Serial.println("Winner: Player 2");
         } else if (p2.redLight) {
+          p1.won = true;
           Serial.println("Winner: Player 1");
         } else if (p1.reaction < p2.reaction) {
+          p1.won = true;
           Serial.println("Winner: Player 1");
           Serial.print("With a difference of ");
           Serial.print((p2.reaction - p1.reaction) / 1000.0 , 3);
           Serial.println(" ms");
         } else if (p2.reaction < p1.reaction) {
+          p2.won = true;
           Serial.println("Winner: Player 2");
           Serial.print("With a difference of ");
           Serial.print((p1.reaction - p2.reaction) / 1000.0 , 3);
           Serial.println(" ms");
         } else {
           Serial.println("Tie!");
+          p1.won = true;
+          p2.won = true;
         }
+        allOff();
         setState(RESULT);
       }
     break;
 
     case RESULT:
+      if (p1.won) blinkPlayer(p1);
+      if (p2.won) blinkPlayer(p2);
       if (elapsed > RESULT_TIME) {
         allOff();
         resetPlayer(p1);
