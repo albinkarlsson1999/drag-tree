@@ -23,12 +23,13 @@ const int NUM_RELAYS = sizeof(RELAYS) / sizeof(RELAYS[0]);
 
 
 // ----- TIMINGS (MS) -----
-const unsigned long STAGE_TIME = 0;
-const unsigned long AMBER_STEP = 0;
-const unsigned long RANDOM_MIN = 0;
-const unsigned long RANDOM_MAX = 0;
-const unsigned long RESULT_TIME = 0;
+const unsigned long STAGE_TIME = 2000;
+const unsigned long AMBER_STEP = 2000;
+const unsigned long RANDOM_MIN = 1000;
+const unsigned long RANDOM_MAX = 5000;
+const unsigned long RESULT_TIME = 1000;
 const unsigned long IGNORE_TIME = 100;
+const unsigned long DEBOUNCE_TIME = 20;
 
 // ----- TYPES -----
 enum State { IDLE, PRESTAGE, STAGE, AMBERS, WAIT_RANDOM, GREEN, RESULT };
@@ -39,8 +40,16 @@ struct Player {
   bool wasPressed;          // Buttons mode last round, for flank detection
   bool redLight;            // Bad start
   bool done;                // If player pressed after green
+  bool rawState;            // what the pin read last loop
+  bool stableState;         // debounced, trusted state
+  unsigned long changedAt;  // millis() when rawState last changed
   unsigned long reaction;   // microseconds
 };
+
+State state = IDLE;
+unsigned long stateStart;
+unsigned long greenTime;
+unsigned long randomDelay;
 
 
 // ----- LAMPS FUNCTIONS -----
@@ -74,14 +83,23 @@ Player p2 = {
 };
 
 bool isHeld(Player &p) {
-  return digitalRead(p.buttonPin) == LOW;
+  return p.stableState;
 }
 
-bool newPress(Player &p) {
-  bool now = isHeld(p);
-  bool result = now && !p.wasPressed;
-  p.wasPressed = now;
-  return result;
+// Call ONCE per loop. Returns true when a debounced press begins.
+bool updateButton(Player &p) {
+  bool raw = digitalRead(p.buttonPin) == LOW;
+
+  if (raw != p.rawState) {          // pin changed since last loop?
+    p.rawState = raw;
+    p.changedAt = millis();       // restart the stability clock
+  }
+
+  if (millis() - p.changedAt >= DEBOUNCE_TIME && p.rawState != p.stableState) {
+    p.stableState = raw;     // accept the new state
+    return raw;              // true only if it became pressed
+  }
+  return false;
 }
 
 void resetPlayer(Player &p) {
@@ -96,6 +114,10 @@ void falseStart(Player &p) {
     lampOn(p.redLamp);
     Serial.print(p.name);
     Serial.println(": RED LIGHT!!");
+    Serial.print("state=");
+Serial.print(state);
+Serial.print(" elapsed=");
+Serial.println(millis() - stateStart);
   }
 }
 
@@ -112,10 +134,6 @@ void printResult(Player &p) {
 
 
 // ----- STATE MACHINE -----
-State state = IDLE;
-unsigned long stateStart;
-unsigned long greenTime;
-unsigned long randomDelay;
 
 void setState (State s) {
   state = s;
@@ -135,8 +153,8 @@ void setup() {
 }
 
 void loop() {
-  bool p1New = newPress(p1);
-  bool p2New = newPress(p2);
+  bool p1New = updateButton(p1);
+  bool p2New = updateButton(p2);
   unsigned long elapsed = millis() - stateStart;
 
   switch (state){
@@ -211,8 +229,14 @@ void loop() {
           Serial.println("Winner: Player 1");
         } else if (p1.reaction < p2.reaction) {
           Serial.println("Winner: Player 1");
+          Serial.print("With a difference of ");
+          Serial.print((p2.reaction - p1.reaction) / 1000.0 , 3);
+          Serial.println(" ms");
         } else if (p2.reaction < p1.reaction) {
           Serial.println("Winner: Player 2");
+          Serial.print("With a difference of ");
+          Serial.print((p1.reaction - p2.reaction) / 1000.0 , 3);
+          Serial.println(" ms");
         } else {
           Serial.println("Tie!");
         }
