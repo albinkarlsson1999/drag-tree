@@ -38,5 +38,31 @@ classDiagram
 
 
     %% The tree
+    class Tree {
+        -Lamp& prestage
+        -Lamp& stage
+        -Lamp& amber1
+        -Lamp& amber2
+        -Lamp& amber3
+        -Lamp& green
+        -Lamp& redLeft
+        -Lamp& redRight
+        +Tree(Lamp& prestage, Lamp& stage, Lamp& amber1, Lamp& amber2, Lamp& amber3, Lamp& green, Lamp& redLeft, Lamp& redRight)
+        +begin()
+        +setPrestage(bool on)
+        +setStage(bool on)
+        +setAmber(int n, bool on)
+        +setGreen(bool on)
+        +setRed(Side side, bool on)
+        +setWinner(Side side, bool on)
+        +allOff()
+    }
+    class Side {
+        <<enumeration>>
+        LEFT
+        RIGHT
+    }
+    Tree 0-- "8" Lamp : lamps
+    Tree ..> Side
 
 ```
